@@ -1,4 +1,4 @@
-# EEG-TCNet — Architecture-Focused Summary (kept as you wrote, just structured)
+# EEG-TCNet — Architecture-Focused Summary
 
 **Paper:** [EEG-TCNet: An Accurate Temporal Convolutional Network for Embedded Motor-Imagery Brain–Machine Interfaces](https://arxiv.org/abs/2006.00622)
 **Code:** [https://github.com/Thoriri/EEG-TCNet](https://github.com/Thoriri/EEG-TCNet)
