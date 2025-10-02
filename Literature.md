@@ -1,100 +1,100 @@
-# EEG-TCNet (TCN for EEG) — Quick Config Notes
+# EEG-TCNet — Architecture-Focused Summary (kept as you wrote, just structured)
 
-**Paper:** Ingolfsson et al., *EEG-TCNet: An Accurate Temporal Convolutional Network for Embedded Motor-Imagery Brain–Machine Interfaces* — [arXiv](https://arxiv.org/abs/2006.00622)
-**Official code (ETH Zürich):** [github.com/iis-eth-zurich/eeg-tcnet](https://github.com/iis-eth-zurich/eeg-tcnet)
+**Paper:** [EEG-TCNet: An Accurate Temporal Convolutional Network for Embedded Motor-Imagery Brain–Machine Interfaces](https://arxiv.org/abs/2006.00622)
+**Code:** [https://github.com/Thoriri/EEG-TCNet](https://github.com/Thoriri/EEG-TCNet)
+
+---
+## Prior Models & Motivation
+
+The paper describes TCPT, which is the previous state-of-art CNN model for EEG MI classification. However, this model is extremely complex raising questions regarding its latency and privacy concerns. EEGNet models are more computationally feasible but it comes at the expense of accuracy (72% vs 89%).
+
+That is the reason why EEG-TCNet was introduced - a model that combines the accuracy with the feasibility of computation. Its number of parameters increases linearly unlike traditional CNN and also it does not suffer from vanishing gradients problem like RNN, allowing it to efficiently handle long range dependencies.
+
+## Reported Performance & Comparative Position
+
+This model was able to achieve ~77% accuracy for classifying and ~83% accuracy after optimizing the hyperparameters based on the patient. When comparing TCNet to other models in terms of both accuracy and number of parameters (computational feasibility), it excels and exceeds all other models on the MOABB. In our use case, this model would be ideal as we require online processing, which makes complex and heavy architectures, like CNN, impossible to implement despite their high accuracy.
+
+## Architecture Highlights
+
+The architecture of the model implements causal convolutions where every filter's output is the same size as the input and the output at one filter depends only on the current and previous data, preventing the model from 'cheating' by looking at the future data. The implementation of causal convolutions is a vital step in our project, as we need to implement the EEG detection in real time.
+
+The model also uses dilated convolutions, which allows the receptive field to increase exponentially. This is useful especially in deep networks as it allows the model to effectively handle long range dependencies, something that is necessary in our project as we map how seizures can build over time for detecting the occurrence of the seizure at the earliest stage.
+
+The model has a number of features that are implemented as they showed better accuracy than their alternatives, which include:
+
+* Batch normalization - Standardizes the values in our dataset
+* Exponential linear unit (ELU) activation - Introduces non-linearity
+* Normal dropout - Reduces variance and avoids overfitting
+
+The model has 1D convolutions but it is able to take in 2D data.
+
+The model's convolutions learn temporal data allowing the model to handle time based dependencies and features. The convolutions are then combined with the feature maps to create features representing past and current data which can be used for effective classification, especially in temporal problems like EEG detection.
+
+## Two Approaches in the Paper
+
+**1) Fixed EEG TCNet** — This approach optimizes hyperparameters for all patients collectively to achieve optimum accuracy. The problem with this approach is that EEG data is highly variable between patients, which is a challenge in hyperparameters as hyperparameters that work on one patient may not work on the other, giving us ~30% variation in the accuracy, which would be unacceptable for model deployment, especially in such a sensitive use case as epilepsy detection. The hyperparameters they achieved were: **F1 = 8, F2 = 16, KE = 32, KT = 4, L = 2, FT =  12, pe = 0.2, pt = 0.3.**
+*C = number of EEG channels, T = number of time samples, F1 = number of temporal filters, F2 = number of spatial filters, KE = kernel size in first convolution, KT = kernel size in TCN module, and FT = number of filters in TCN module.*
+
+**2) Variable EEG TCNet** — This approach optimizes per patient hyperparameters by using cross validated grid search, ensuring that for every patient, the model parameters fit perfectly and avoiding inter-patient variability issues that resulted in a high variation in the fixed EEG TCNet approach, which in some cases dropped the accuracy to as low as 54% for some patients.
+
+## Training Setup
+
+The  models are trained for 750 epochs with an Adam optimizer  at a learning rate of 0.001 and a batch size of 64. These training hyperparameters are determined via cross-validation on the training set. The loss function used is cross entropy loss function.
+
+## Relevance to Our Use Case
+
+This paper highly fits our use case given that it provides a very competitive accuracy to the current implemented models and exceeds them in the number of parameters needed. This allows us to detect seizures in real-time as it is not computationally heavy, and also achieve a high accuracy, comparable to the accuracy achieved by extremely heavy models. This model also takes into consideration that the problem we have at hand is a temporal problem, and the seizures can build up over time, allowing the detection of a seizure build up at the earliest stage.
 
 ---
 
-## Fixed (one-size) Hyperparameters
+## How the model handles **2D** and **3D** inputs with “1D” temporal convs
 
-| Parameter    | Simple meaning                                                            |
-| ------------ | ------------------------------------------------------------------------- |
-| **F1 = 8**   | Number of temporal filters in the EEGNet branch’s first convolution.      |
-| **F2 = 16**  | Number of pointwise/depthwise-separable filters in the EEGNet branch.     |
-| **KE = 32**  | Kernel size (samples) used in the EEGNet branch.                          |
-| **KT = 4**   | Temporal kernel size for the TCN module.                                  |
-| **L = 2**    | Number of residual TCN blocks (stack depth).                              |
-| **FT = 12**  | Number of filters in the initial convolutional layers (paper’s notation). |
-| **pe = 0.2** | Dropout rate in the EEGNet branch.                                        |
-| **pt = 0.3** | Dropout rate in the TCN module.                                           |
+* **2D (channels × time):** Treat **time** as the sequence and **stack channels as features** at each time step.
+  Example (3 channels × 5 time steps):
 
-**Legend (parameter meanings):**
+  * t1 → **[a11, a21, a31]**
+  * t2 → **[a12, a22, a32]**
+  * t3 → **[a13, a23, a33]**
+  * t4 → **[a14, a24, a34]**
+  * t5 → **[a15, a25, a35]**
+    A 1D temporal convolution **slides only along time**; it does not slide across the feature dimension.
 
-* **KT:** Kernel size in TCN module
-* **pt:** Dropout rate in TCN module
-* **L:** Number of residual blocks
-* **FT:** Filters in convolutional layers
-* **F1:** Temporal filters in EEGNet
-* **KE:** Kernel size in EEGNet
-* **pe:** Dropout rate in EEGNet
+* **3D (channels × frequency × time):** At each time step, **flatten everything except time** (e.g., channels and frequency) into a feature vector; the 1D temporal conv again slides **only over time**.
+  Example (2 channels × 3 frequencies × 4 time steps):
+
+  * t1 → **[a111, a112, a113, a211, a212, a213]**
+  * t2 → **[a121, a122, a123, a221, a222, a223]**
+  * t3 → **[a131, a132, a133, a231, a232, a233]**
+  * t4 → **[a141, a142, a143, a241, a242, a243]**
 
 ---
 
-## Training Setup (from the paper)
+## Preprocessing (brief, simple)
 
-* **Optimizer:** Adam
-* **Learning rate:** 0.001
-* **Batch size:** 64
-* **Epochs:** 750
-
----
-
-## Sanity-Check Targets (to verify a re-implementation)
-
-* **Trainable parameters:** ~4,272
-* **Compute per inference:** ~6.8 MMACs
-* **BCI IV-2a accuracy (fixed model):** ~77.35% (κ ≈ 0.70)
-* **With subject-specific tuning:** ~83.84% (≈ +6.49%)
+1. **Cut a fixed-length window** around the task (e.g., ~4–5 s).
+2. **Make shapes consistent** (same channel order, same trial length).
+3. **Normalize per channel** (subtract mean, scale variance using **training-set** stats).
+4. **Split cleanly** (avoid any leakage between training and test sets).
 
 ---
 
-# S4 (Structured State Spaces) — Quick Config Notes
+## Hyperparameter definitions (simple)
 
-**Paper:** Gu, Goel, Ré, *Efficiently Modeling Long Sequences with Structured State Spaces (S4)* — [arXiv](https://arxiv.org/abs/2111.00396). ([arXiv][1])
-**Official code (Hazy Research):** [github.com/state-spaces/s4](https://github.com/state-spaces/s4). ([GitHub][2])
-
----
-
-## Fixed (one-size) Hyperparameters
-
-| Parameter                  | Simple meaning                                                                                            |
-| -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **`model.n_layers = 3`**   | Number of stacked S4 blocks (depth). ([GitHub][2])                                                        |
-| **`model.d_model = 128`**  | Hidden width (features) of each block. ([GitHub][2])                                                      |
-| **`model.norm = batch`**   | Normalization type inside blocks. ([GitHub][2])                                                           |
-| **`model.prenorm = True`** | Apply normalization before the block. ([GitHub][2])                                                       |
-| **`ssm.l_max = 8192`**     | Example receptive-field length used in a released WT103 config/checkpoint (task-dependent). ([GitHub][3]) |
-| **Optimizer param groups** | Use **lower LR** and **0 weight decay** for SSM parameters `(A, B[, Δ])`. ([GitHub][2])                   |
-
-**Legend (parameter meanings):**
-
-* **`n_layers`**: number of S4 layers to stack (model depth). ([GitHub][2])
-* **`d_model`**: width of the model (hidden dimensionality). ([GitHub][2])
-* **`norm` / `prenorm`**: normalization choice and placement. ([GitHub][2])
-* **`l_max`**: effective 1-D kernel length (how far in time the SSM “sees”). Example value **8192** appears in the WT103 setup. ([GitHub][3])
-* **Optimizer param groups**: SSM kernel params get special treatment (smaller LR, zero WD) via grouped optimizer settings. ([GitHub][2])
+* **C:** number of EEG **channels**.
+* **T:** number of **time samples** per trial.
+* **F1:** number of initial **temporal filters** (different temporal views on the raw signal).
+* **F2:** number of **spatial/pointwise filters** (mixing across channels after temporal filtering).
+* **KE:** **kernel size** (in samples) for the first temporal conv (how long the window is).
+* **KT:** **kernel size** inside the TCN (how far each TCN conv looks back).
+* **L:** number of **TCN residual blocks** stacked (depth over time; longer effective memory).
+* **FT:** number of **feature maps** in the TCN (its width).
+* **pe / pt:** **dropout rates** in the front end / in the TCN (regularization).
 
 ---
 
-## Training Setup (from the repo)
+## Why this is suitable for **seizure detection**
 
-* **Entrypoint:** `python -m train` with **Hydra** configs under `configs/` and model presets under `models/`. ([GitHub][2])
-* **Example CLI (from README):** `python -m train pipeline=mnist dataset.permute=True model=s4 model.n_layers=3 model.d_model=128 model.norm=batch model.prenorm=True`. ([GitHub][2])
-* **Optimizer:** AdamW with **param-group overrides** (lower LR, zero weight decay for `(A,B[,Δ])`). ([GitHub][2])
-* **Configs:** Predefined, **reproducible experiment configs** are provided in the repo to mirror paper results. ([GitHub][2])
-
----
-
-## Sanity-Check Targets (to verify a re-implementation)
-
-* **LRA performance:** The paper reports **SoTA across Long Range Arena** tasks, including solving **Path-X (length 16k)**; use the repo configs to reproduce comparable setups. ([arXiv][1])
-* **Receptive field example:** The **WT103** language model checkpoint uses **`l_max = 8192`** (reference point for sequence length). ([GitHub][3])
-* **Training scaffold:** Running the provided Hydra configs and respecting **SSM param-group rules** (lower LR, zero WD) should match the repo’s documented behavior. ([GitHub][2])
-
----
-
-[1]: https://arxiv.org/abs/2111.00396?utm_source=chatgpt.com "Efficiently Modeling Long Sequences with Structured State Spaces"
-[2]: https://github.com/state-spaces/s4?utm_source=chatgpt.com "state-spaces/s4: Structured state space sequence models"
-[3]: https://github.com/changliang5811/Structured-State-Spaces?utm_source=chatgpt.com "Sequence Modeling with Structured State Spaces"
-
-
+* **Causal** processing respects real-time constraints (no future leakage).
+* **Dilations + TCN depth** let you set the **look-back window** to match the **pre-ictal horizon**.
+* **Compactness** enables **on-device** inference with low latency and stronger privacy.
+* **Per-patient tuning** aligns with EEG variability across individuals in clinical contexts.
