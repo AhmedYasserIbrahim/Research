@@ -1,3 +1,42 @@
+# 📄 Paper Summary 1  
+## **A Hybrid Optimization-Enhanced 1D-ResCNN Framework for Epileptic Spike Detection in Scalp EEG Signals**  
+**Kumar & Upadhyay, Scientific Reports (Nature), Feb 2025**  
+🔗 https://www.nature.com/articles/s41598-025-90164-3
+
+---
+
+## **Overview**
+This paper proposes a **1D-ResCNN** model for epileptic spike detection using scalp EEG.  
+The model combines the efficiency of **1D convolution** for temporal pattern extraction with **residual connections** to preserve original signal information.  
+The goal is to create a lightweight and effective spike detector suitable for real-time systems.
+
+---
+
+## **Model Explanation (Simplified)**
+
+### **1. Main Path – Feature Extraction**
+The main processing path contains:
+- **1D Convolution layers** to detect important temporal patterns such as sharp spikes or transitions  
+- **Swish activation** to introduce non-linearity and allow learning deep patterns  
+- **Batch Normalization** to stabilize values during training  
+
+This produces transformed, high-level features from the raw EEG.
+
+---
+
+### **2. Skip Path – Preserving Original Information**
+A second path bypasses all transformations and carries the **original input** forward unchanged.
+
+This allows the model to:
+- Preserve raw signal shape  
+- Retain subtle details  
+- Avoid losing important information  
+
+---
+
+### **3. Residual Block Structure**
+At the end of each block:
+
 
 This combination helps the model learn new information while keeping what was already useful.  
 The architecture uses **four** such residual blocks to build progressively deeper representations.
